@@ -3,14 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pemandu MyTransporter</title>
+    <title>MyTransporter - Pemandu</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        body { font-family: sans-serif; background: #121212; color: white; padding: 10px; }
+        body { font-family: sans-serif; background: #121212; color: white; padding: 10px; margin: 0; }
         #map { height: 250px; width: 100%; border-radius: 10px; border: 1px solid #444; }
         .card { background: #1e1e1e; padding: 15px; border-radius: 10px; margin-top: 10px; border-left: 5px solid #f1c40f; }
-        .btn { padding: 12px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
+        .btn { padding: 12px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 8px; }
         .btn-accept { background: #f1c40f; color: black; }
+        .btn-reject { background: #e74c3c; color: white; }
         .btn-complete { background: #2ecc71; color: white; }
     </style>
 </head>
@@ -18,7 +19,7 @@
 
     <h2 style="text-align:center; color:#f1c40f;">🚖 Dashboard Pemandu</h2>
     <div id="map"></div>
-    <div id="list">Memuatkan...</div>
+    <div id="list">Memuatkan tugasan...</div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
@@ -47,27 +48,29 @@
 
             Object.keys(data).reverse().forEach(id => {
                 const o = data[id];
-                if(o.status === "Selesai") return;
+                if(o.status === "Selesai" || o.status === "Ditolak") return;
 
                 let btn = "";
                 if(o.status === "Menunggu Sahkan") {
-                    btn = `<button class="btn btn-accept" onclick="startJob('${id}')">Terima Job & Ambil Penumpang</button>`;
+                    btn = `
+                        <button class="btn btn-accept" onclick="startTracking('${id}', 'Sila Bayar')">Terima Job</button>
+                        <button class="btn btn-reject" onclick="updateStatus('${id}', 'Ditolak')">Tolak Job</button>
+                    `;
                 } else if(o.status === "Semak Resit") {
-                    btn = `<button class="btn btn-complete" onclick="updateStatus('${id}', 'Sedang Berjalan')">Sahkan Bayaran & Mula Jalan</button>`;
+                    btn = `<button class="btn btn-complete" onclick="updateStatus('${id}', 'Sedang Berjalan')">Sahkan Bayaran & Mula Perjalanan</button>`;
                 } else if(o.status === "Sedang Berjalan") {
-                    btn = `<button class="btn btn-complete" onclick="updateStatus('${id}', 'Selesai')">Selesai Penghantaran</button>`;
+                    btn = `<button class="btn btn-complete" onclick="updateStatus('${id}', 'Selesai')">Selesai Hantar Penumpang</button>`;
                 }
 
-                list.innerHTML += `<div class="card"><b>${o.nama}</b><br>Harga: RM${o.harga}<br>Status: ${o.status}${btn}</div>`;
+                list.innerHTML += `<div class="card"><b>${o.nama}</b><br>Harga: RM${o.harga}<br>Dari: ${o.pickup}<br>Ke: ${o.dropoff}<br>${btn}</div>`;
             });
         });
 
-        function startJob(id) {
-            updateStatus(id, "Sila Bayar");
+        function startTracking(id, status) {
+            updateStatus(id, status);
             if (navigator.geolocation) {
                 watchId = navigator.geolocation.watchPosition(pos => {
-                    let lat = pos.coords.latitude;
-                    let lon = pos.coords.longitude;
+                    let lat = pos.coords.latitude, lon = pos.coords.longitude;
                     database.ref('pesanan/' + id).update({ driver_lat: lat, driver_lon: lon });
                     map.setView([lat, lon], 15);
                     if(!currentMarker) currentMarker = L.marker([lat, lon]).addTo(map);
@@ -78,7 +81,7 @@
 
         function updateStatus(id, s) {
             database.ref('pesanan/' + id).update({ status: s });
-            if(s === "Selesai" && watchId) navigator.geolocation.clearWatch(watchId);
+            if((s === "Selesai" || s === "Ditolak") && watchId) navigator.geolocation.clearWatch(watchId);
         }
     </script>
 </body>
