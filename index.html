@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyTransporter - Pelanggan (Fixed Location)</title>
+    <title>MyTransporter - Pelanggan (Versi Stabil)</title>
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; padding: 15px; margin: 0; }
         .card { background: white; max-width: 500px; margin: auto; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
@@ -19,7 +21,7 @@
         .btn-confirm { background: #1a73e8; color: white; }
         .status-box { padding: 15px; border-radius: 10px; text-align: center; margin-top: 10px; font-weight: bold; border: 1px solid #ffeeba; background: #fff3cd; color: #856404; }
         .pay-now { background: #ffffff; border: 2px solid #28a745; margin-top: 15px; padding: 15px; border-radius: 10px; }
-        .hidden { display: none; }
+        .hidden { display: none !important; }
         .leaflet-routing-container { display: none !important; }
     </style>
 </head>
@@ -31,15 +33,10 @@
     <div id="bookingForm">
         <input type="text" id="custName" placeholder="Nama Anda">
         <input type="tel" id="custPhone" placeholder="No. Telefon">
-        
         <button class="btn btn-gps" onclick="getLocation()">📍 Kesan Lokasi Jemput Saya</button>
-        
         <div id="map"></div>
-        <p style="font-size:11px; color:#666; text-align:center;">(Klik peta untuk tetapkan destinasi hantar)</p>
-
         <input type="text" id="pickupLoc" placeholder="Lokasi jemput..." readonly class="readonly-input">
         <input type="text" id="dropoffLoc" placeholder="Lokasi destinasi..." readonly class="readonly-input">
-        
         <h3 id="fareText" style="text-align:center; color:#27ae60;">RM 0.00</h3>
         <button class="btn btn-order" onclick="submitBooking()">Tempah & Tunggu Pemandu</button>
     </div>
@@ -53,6 +50,7 @@
             <a id="waLink" href="#" target="_blank" class="btn btn-wa">📲 Hantar Resit ke WhatsApp</a>
             <button class="btn btn-confirm" onclick="uploadedReceipt()">Saya Sudah Bayar</button>
         </div>
+        <button class="btn" style="background:#eee; color:#333; font-size:12px;" onclick="resetApp()">Tempah Baru (Batal)</button>
     </div>
 </div>
 
@@ -72,53 +70,49 @@
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
+    // Inisialisasi Data
+    let currentOrderId = localStorage.getItem('lastOrderId');
+    let pickupCoords, dropoffCoords, routingControl, driverMarker;
+    let finalPrice = 0;
+
     var map = L.map('map').setView([3.139, 101.686], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-
-    var pickupCoords, dropoffCoords, routingControl, driverMarker;
-    var finalPrice = 0;
 
     var carIcon = L.icon({
         iconUrl: 'https://cdn-icons-png.flaticon.com/512/854/854838.png',
         iconSize: [30, 30], iconAnchor: [15, 15]
     });
 
-    // 1. FUNGSI GPS (AMBIL LOKASI JEMPUT)
+    // Check jika ada order aktif semasa load page
+    if (currentOrderId) {
+        document.getElementById('bookingForm').classList.add('hidden');
+        document.getElementById('statusArea').classList.remove('hidden');
+        listenToStatus();
+    }
+
     function getLocation() {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(pos => {
                 pickupCoords = L.latLng(pos.coords.latitude, pos.coords.longitude);
                 map.setView(pickupCoords, 16);
-                
-                // PANGGIL ALAMAT UNTUK JEMPUT
                 getAddress(pickupCoords.lat, pickupCoords.lng, 'pickupLoc');
-                
                 updateRoute();
-            }, () => alert("Sila benarkan GPS pada telefon anda!"));
+            }, () => alert("Sila benarkan GPS!"));
         }
     }
 
-    // 2. KLIK PETA (AMBIL LOKASI DESTINASI)
     map.on('click', e => { 
         dropoffCoords = e.latlng; 
-        
-        // PANGGIL ALAMAT UNTUK DESTINASI
         getAddress(dropoffCoords.lat, dropoffCoords.lng, 'dropoffLoc');
-        
         updateRoute(); 
     });
 
-    // 3. FUNGSI TUKAR KOORDINAT KE ALAMAT TEKS
     async function getAddress(lat, lon, fieldId) {
         try {
             const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`);
             const data = await response.json();
-            const address = data.display_name || "Lokasi dikesan";
-            // Paparkan alamat ringkas dalam kotak input
-            document.getElementById(fieldId).value = address.substring(0, 50) + "...";
-        } catch (error) {
-            document.getElementById(fieldId).value = lat.toFixed(4) + ", " + lon.toFixed(4);
-        }
+            document.getElementById(fieldId).value = (data.display_name || "Lokasi dikesan").substring(0, 50) + "...";
+        } catch (e) { document.getElementById(fieldId).value = lat.toFixed(4) + "," + lon.toFixed(4); }
     }
 
     function updateRoute() {
@@ -126,8 +120,7 @@
         if (routingControl) map.removeControl(routingControl);
         routingControl = L.Routing.control({
             waypoints: [pickupCoords, dropoffCoords],
-            show: false,
-            addWaypoints: false
+            show: false, addWaypoints: false
         }).on('routesfound', e => {
             let dist = e.routes[0].summary.totalDistance / 1000;
             finalPrice = Math.max(10, dist * 2);
@@ -135,12 +128,15 @@
         }).addTo(map);
     }
 
+    // FUNGSI SUBMIT (FIXED)
     function submitBooking() {
         const name = document.getElementById('custName').value;
-        if(!name || !pickupCoords || !dropoffCoords) return alert("Sila pastikan nama diisi dan kedua-dua lokasi dipilih!");
-        
+        if(!name || !pickupCoords || !dropoffCoords) return alert("Lengkapkan nama & lokasi!");
+
         const newRef = database.ref('pesanan').push();
         currentOrderId = newRef.key;
+        localStorage.setItem('lastOrderId', currentOrderId);
+
         newRef.set({
             nama: name, 
             phone: document.getElementById('custPhone').value,
@@ -149,39 +145,56 @@
             harga: finalPrice.toFixed(2), 
             status: "Menunggu Sahkan",
             masa: new Date().toLocaleString()
-        });
-        document.getElementById('bookingForm').classList.add('hidden');
-        document.getElementById('statusArea').classList.remove('hidden');
-        listenToStatus();
+        }).then(() => {
+            document.getElementById('bookingForm').classList.add('hidden');
+            document.getElementById('statusArea').classList.remove('hidden');
+            listenToStatus();
+        }).catch(err => alert("Ralat: " + err.message));
+    }
+
+    // FUNGSI UPLOAD RESIT (FIXED)
+    function uploadedReceipt() {
+        if (!currentOrderId) return alert("ID Pesanan hilang. Sila tempah semula.");
+        
+        database.ref('pesanan/' + currentOrderId).update({ status: "Semak Resit" })
+        .then(() => alert("Notifikasi dihantar! Pemandu akan semak bayaran anda."))
+        .catch(err => alert("Gagal kemaskini: " + err.message));
     }
 
     function listenToStatus() {
+        if (!currentOrderId) return;
         database.ref('pesanan/' + currentOrderId).on('value', snap => {
             const data = snap.val();
             if(!data) return;
 
-            // Pantau Lokasi Pemandu Real-Time
             if(data.driver_lat && data.driver_lon) {
                 let pos = [data.driver_lat, data.driver_lon];
-                if(!driverMarker) driverMarker = L.marker(pos, {icon: carIcon}).addTo(map).bindPopup("Lokasi Pemandu");
+                if(!driverMarker) driverMarker = L.marker(pos, {icon: carIcon}).addTo(map);
                 else driverMarker.setLatLng(pos);
             }
 
             if(data.status === "Sila Bayar") {
                 document.getElementById('paymentArea').classList.remove('hidden');
                 document.getElementById('finalFare').innerText = data.harga;
-                const msg = encodeURIComponent(`Halo, saya ${data.nama}. Ini resit RM${data.harga} untuk perjalanan dari ${data.pickup} ke ${data.dropoff}.`);
-                document.getElementById('waLink').href = `https://wa.me/60148495947?text=${msg}`;
-            } else if(data.status === "Sedang Berjalan") {
+                document.getElementById('waLink').href = `https://wa.me/60148495947?text=Resit RM${data.harga} dari ${data.nama}`;
+            } else if(data.status === "Semak Resit") {
                 document.getElementById('paymentArea').classList.add('hidden');
-                document.getElementById('statusMsg').innerText = "Bayaran Diterima! Pemandu sedang menuju ke lokasi anda.";
+                document.getElementById('statusMsg').innerText = "Menunggu pemandu sahkan resit anda...";
+            } else if(data.status === "Sedang Berjalan") {
+                document.getElementById('statusMsg').innerText = "Bayaran Sah! Pemandu sedang ke lokasi anda.";
                 document.getElementById('statusMsg').style.background = "#27ae60";
                 document.getElementById('statusMsg').style.color = "white";
+            } else if(data.status === "Selesai") {
+                resetApp();
+                alert("Perjalanan Selesai. Terima kasih!");
             }
         });
     }
 
-    function uploadedReceipt() { database.ref('pesanan/' + currentOrderId).update({ status: "Semak Resit" }); }
+    function resetApp() {
+        localStorage.removeItem('lastOrderId');
+        location.reload();
+    }
 </script>
 </body>
 </html>
