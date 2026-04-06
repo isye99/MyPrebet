@@ -3,80 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyTransporter - Pelanggan (Peta Fixed)</title>
-    
+    <title>MyTransporter - Pelanggan</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
-
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f4f7f6; padding: 15px; margin: 0; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; padding: 15px; margin: 0; }
         .card { background: white; max-width: 500px; margin: auto; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        h2 { text-align: center; color: #2c3e50; margin-top: 0; }
-        
-        /* PENTING: Peta takkan keluar kalau tak set height di sini */
-        #map { 
-            height: 350px; 
-            width: 100%; 
-            border-radius: 10px; 
-            margin: 10px 0; 
-            border: 2px solid #ddd; 
-            z-index: 1; /* Pastikan peta tidak tenggelam */
-        }
-        
-        input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 14px; }
-        .readonly-input { background: #f9f9f9; color: #555; cursor: not-allowed; }
-        
+        #map { height: 350px; width: 100%; border-radius: 10px; margin: 10px 0; border: 2px solid #ddd; z-index: 1; }
+        input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
         .btn { width: 100%; padding: 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; font-size: 16px; text-decoration: none; display: inline-block; text-align: center; box-sizing: border-box; }
-        .btn-gps { background: #3498db; color: white; margin-bottom: 5px; }
+        .btn-gps { background: #3498db; color: white; }
         .btn-order { background: #27ae60; color: white; }
         .btn-wa { background: #25D366; color: white; }
         .btn-confirm { background: #1a73e8; color: white; }
-
-        .price-display { background: #e8f0fe; padding: 10px; border-radius: 8px; text-align: center; margin: 10px 0; border: 1px solid #b3d7ff; }
-        .status-box { padding: 15px; border-radius: 10px; text-align: center; margin-top: 10px; font-weight: bold; font-size: 14px; border: 1px solid #ffeeba; }
-        .waiting { background: #fff3cd; color: #856404; }
-        .pay-now { background: #ffffff; color: #155724; border: 2px solid #28a745; margin-top: 15px; padding: 15px; border-radius: 10px; }
+        .status-box { padding: 15px; border-radius: 10px; text-align: center; margin-top: 10px; font-weight: bold; border: 1px solid #ffeeba; background: #fff3cd; color: #856404; }
+        .pay-now { background: #ffffff; border: 2px solid #28a745; margin-top: 15px; padding: 15px; border-radius: 10px; }
         .hidden { display: none; }
-        
-        /* Sembunyikan panel arahan teks Routing Machine supaya skrin bersih */
         .leaflet-routing-container { display: none !important; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>🚗 MyTransporter</h2>
+    <h2 style="text-align:center;">🚗 MyTransporter</h2>
     
     <div id="bookingForm">
         <input type="text" id="custName" placeholder="Nama Anda">
         <input type="tel" id="custPhone" placeholder="No. Telefon">
-        
         <button class="btn btn-gps" onclick="getLocation()">📍 Kesan Lokasi Saya</button>
-        
         <div id="map"></div>
-        <p style="font-size:11px; color:#666; text-align:center;">(1. Tekan GPS untuk jemput | 2. Klik peta untuk destinasi)</p>
-
-        <input type="text" id="pickupLoc" placeholder="Lokasi jemput..." readonly class="readonly-input">
-        <input type="text" id="dropoffLoc" placeholder="Klik peta untuk destinasi..." readonly class="readonly-input">
-        
-        <div class="price-display">
-            <div id="distText" style="font-size:12px;">Jarak: 0 km</div>
-            <h2 id="fareText" style="margin:0; color:#27ae60;">RM 0.00</h2>
-        </div>
-
+        <input type="text" id="pickupLoc" placeholder="Lokasi jemput..." readonly style="background:#f9f9f9">
+        <input type="text" id="dropoffLoc" placeholder="Klik peta untuk destinasi..." readonly style="background:#f9f9f9">
+        <h3 id="fareText" style="text-align:center; color:#27ae60;">RM 0.00</h3>
         <button class="btn btn-order" onclick="submitBooking()">Tempah & Tunggu Pemandu</button>
     </div>
 
     <div id="statusArea" class="hidden">
-        <div id="statusMsg" class="status-box waiting">Sedang mencari pemandu... Sila tunggu sebentar.</div>
-        
+        <div id="statusMsg" class="status-box">Sedang mencari pemandu...</div>
         <div id="paymentArea" class="pay-now hidden">
             <h3 style="margin:0">Pemandu Sahkan! ✅</h3>
-            <p>Sila buat bayaran <b>RM <span id="finalFare">0.00</span></b> ke:</p>
-            <div style="background:#f1f1f1; padding:10px; border-radius:8px; font-family:monospace; margin-bottom:10px;">
-                <b>MAYBANK: 162263547890</b><br>Nama: Ahmad Transport
-            </div>
-            
+            <p>Sila bayar <b>RM <span id="finalFare">0.00</span></b> ke:</p>
+            <p><b>MAYBANK: 162263547890</b> (Ahmad Transport)</p>
             <a id="waLink" href="#" target="_blank" class="btn btn-wa">📲 Hantar Resit ke WhatsApp</a>
             <button class="btn btn-confirm" onclick="uploadedReceipt()">Saya Sudah Bayar</button>
         </div>
@@ -89,102 +56,62 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 
 <script>
-    // Konfigurasi Firebase anda
     const firebaseConfig = {
-      apiKey: "AIzaSyA9vK7iI1awExMkWxMFLtNDVlM4d1EM26o",
-      authDomain: "mytransporter-687d9.firebaseapp.com",
-      databaseURL: "https://mytransporter-687d9-default-rtdb.asia-southeast1.firebasedatabase.app/",
-      projectId: "mytransporter-687d9",
-      appId: "1:495656207465:web:4d603fe3c77abadfe0cef8"
+        apiKey: "AIzaSyA9vK7iI1awExMkWxMFLtNDVlM4d1EM26o",
+        authDomain: "mytransporter-687d9.firebaseapp.com",
+        databaseURL: "https://mytransporter-687d9-default-rtdb.asia-southeast1.firebasedatabase.app/",
+        projectId: "mytransporter-687d9",
+        appId: "1:495656207465:web:4d603fe3c77abadfe0cef8"
     };
-
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    // Inisialisasi Peta - Kuala Lumpur sebagai default
     var map = L.map('map').setView([3.139, 101.686], 13);
-    
-    // TileLayer: Ini yang melukis visual peta
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap'
-    }).addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    var pickupCoords = null, dropoffCoords = null, routingControl = null;
-    var finalDist = 0, finalPrice = 0;
+    var pickupCoords, dropoffCoords, routingControl, driverMarker;
+    var finalPrice = 0;
 
-    // Fungsi GPS
+    var carIcon = L.icon({
+        iconUrl: 'https://cdn-icons-png.flaticon.com/512/854/854838.png',
+        iconSize: [30, 30], iconAnchor: [15, 15]
+    });
+
     function getLocation() {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(pos => {
                 pickupCoords = L.latLng(pos.coords.latitude, pos.coords.longitude);
                 map.setView(pickupCoords, 16);
-                getAddress(pickupCoords.lat, pickupCoords.lng, 'pickupLoc');
                 updateRoute();
-            }, () => alert("Sila benarkan akses lokasi (GPS) pada browser anda."));
-        } else {
-            alert("Peranti anda tidak menyokong GPS.");
+            });
         }
     }
 
-    // Klik Peta
-    map.on('click', e => {
-        dropoffCoords = e.latlng;
-        getAddress(dropoffCoords.lat, dropoffCoords.lng, 'dropoffLoc');
-        updateRoute();
-    });
+    map.on('click', e => { dropoffCoords = e.latlng; updateRoute(); });
 
-    // Lukis Laluan & Kira Harga
     function updateRoute() {
         if (!pickupCoords || !dropoffCoords) return;
         if (routingControl) map.removeControl(routingControl);
-
         routingControl = L.Routing.control({
             waypoints: [pickupCoords, dropoffCoords],
-            show: false,
-            addWaypoints: false,
-            draggableWaypoints: false
-        }).on('routesfound', function(e) {
-            var routes = e.routes;
-            finalDist = routes[0].summary.totalDistance / 1000;
-            finalPrice = Math.max(10, finalDist * 2);
-            document.getElementById('distText').innerText = `Jarak: ${finalDist.toFixed(2)} km`;
-            document.getElementById('fareText').innerText = `RM ${finalPrice.toFixed(2)}`;
+            show: false
+        }).on('routesfound', e => {
+            let dist = e.routes[0].summary.totalDistance / 1000;
+            finalPrice = Math.max(10, dist * 2);
+            document.getElementById('fareText').innerText = "RM " + finalPrice.toFixed(2);
         }).addTo(map);
-    }
-
-    // Tukar Koordinat ke Alamat
-    async function getAddress(lat, lon, id) {
-        try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`);
-            const data = await res.json();
-            const addr = data.display_name;
-            document.getElementById(id).value = addr.substring(0, 45) + "...";
-        } catch (err) {
-            document.getElementById(id).value = lat.toFixed(4) + ", " + lon.toFixed(4);
-        }
     }
 
     function submitBooking() {
         const name = document.getElementById('custName').value;
-        const phone = document.getElementById('custPhone').value;
-        if(!name || !pickupCoords || !dropoffCoords) {
-            alert("Sila isi nama, guna GPS jemput dan klik destinasi pada peta.");
-            return;
-        }
-
+        if(!name || !dropoffCoords) return alert("Lengkapkan maklumat!");
         const newRef = database.ref('pesanan').push();
         currentOrderId = newRef.key;
         newRef.set({
-            nama: name,
-            phone: phone,
-            pickup: document.getElementById('pickupLoc').value,
-            dropoff: document.getElementById('dropoffLoc').value,
-            harga: finalPrice.toFixed(2),
-            jarak: finalDist.toFixed(2) + " km",
-            status: "Menunggu Sahkan",
-            masa: new Date().toLocaleString()
+            nama: name, phone: document.getElementById('custPhone').value,
+            pickup: "Lokasi GPS", dropoff: "Lokasi Peta",
+            harga: finalPrice.toFixed(2), status: "Menunggu Sahkan"
         });
-
         document.getElementById('bookingForm').classList.add('hidden');
         document.getElementById('statusArea').classList.remove('hidden');
         listenToStatus();
@@ -195,26 +122,27 @@
             const data = snap.val();
             if(!data) return;
 
+            // Pantau Lokasi Pemandu
+            if(data.driver_lat && data.driver_lon) {
+                let pos = [data.driver_lat, data.driver_lon];
+                if(!driverMarker) driverMarker = L.marker(pos, {icon: carIcon}).addTo(map);
+                else driverMarker.setLatLng(pos);
+            }
+
             if(data.status === "Sila Bayar") {
                 document.getElementById('paymentArea').classList.remove('hidden');
                 document.getElementById('finalFare').innerText = data.harga;
-                document.getElementById('statusMsg').innerText = "Pemandu sedia! Sila buat bayaran segera.";
-                const msg = encodeURIComponent(`Halo, saya ${data.nama}. Ini resit RM${data.harga} dari ${data.pickup} ke ${data.dropoff}.`);
-                document.getElementById('waLink').href = `https://wa.me/60148495947?text=${msg}`;
-            } else if(data.status === "Semak Resit") {
-                document.getElementById('paymentArea').classList.add('hidden');
-                document.getElementById('statusMsg').innerText = "Menunggu pemandu menyemak resit anda...";
+                document.getElementById('waLink').href = `https://wa.me/60148495947?text=Resit RM${data.harga}`;
             } else if(data.status === "Sedang Berjalan") {
+                document.getElementById('paymentArea').classList.add('hidden');
+                document.getElementById('statusMsg').innerText = "Pemandu dalam perjalanan! Lihat peta.";
                 document.getElementById('statusMsg').style.background = "#27ae60";
                 document.getElementById('statusMsg').style.color = "white";
-                document.getElementById('statusMsg').innerText = "Bayaran DITERIMA! Pemandu sedang menuju ke anda. 🚗💨";
             }
         });
     }
 
-    function uploadedReceipt() {
-        database.ref('pesanan/' + currentOrderId).update({ status: "Semak Resit" });
-    }
+    function uploadedReceipt() { database.ref('pesanan/' + currentOrderId).update({ status: "Semak Resit" }); }
 </script>
 </body>
 </html>
