@@ -7,41 +7,58 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        body { font-family: sans-serif; background: #f4f7f6; padding: 15px; }
-        .card { background: white; max-width: 500px; margin: auto; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        #map { height: 250px; border-radius: 10px; margin: 10px 0; }
-        input { width: 100%; padding: 10px; margin: 5px 0; border: 1px solid #ddd; border-radius: 5px; box-sizing: border-box; }
-        .btn { width: 100%; padding: 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; padding: 15px; margin: 0; }
+        .card { background: white; max-width: 500px; margin: auto; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #2c3e50; }
+        #map { height: 250px; border-radius: 10px; margin: 10px 0; border: 1px solid #ddd; }
+        input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        
+        .btn { width: 100%; padding: 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; font-size: 16px; text-decoration: none; display: inline-block; text-align: center; box-sizing: border-box; }
         .btn-order { background: #27ae60; color: white; }
-        .status-box { padding: 15px; border-radius: 10px; text-align: center; margin-top: 10px; font-weight: bold; }
-        .waiting { background: #fff3cd; color: #856404; }
-        .pay-now { background: #d4edda; color: #155724; border: 2px solid #28a745; }
+        .btn-wa { background: #25D366; color: white; margin-top: 15px; } /* Warna Hijau WhatsApp */
+        .btn-confirm { background: #1a73e8; color: white; }
+
+        .status-box { padding: 15px; border-radius: 10px; text-align: center; margin-top: 10px; font-weight: bold; font-size: 14px; }
+        .waiting { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        .pay-now { background: #ffffff; color: #155724; border: 2px solid #28a745; margin-top: 15px; padding: 15px; border-radius: 10px; }
         .hidden { display: none; }
+        hr { border: 0; border-top: 1px solid #eee; margin: 15px 0; }
     </style>
 </head>
 <body>
 
-<div class="card" id="mainCard">
+<div class="card">
     <h2>🚗 MyTransporter</h2>
+    
     <div id="bookingForm">
         <input type="text" id="custName" placeholder="Nama Anda">
-        <input type="tel" id="custPhone" placeholder="No. Telefon">
+        <input type="tel" id="custPhone" placeholder="No. Telefon (cth: 0148495947)">
         <div id="map"></div>
-        <input type="text" id="pickupLoc" placeholder="Lokasi jemput..." readonly>
-        <input type="text" id="dropoffLoc" placeholder="Klik peta untuk destinasi..." readonly>
+        <input type="text" id="pickupLoc" placeholder="Lokasi jemput (Kesan GPS...)" readonly style="background:#f9f9f9">
+        <input type="text" id="dropoffLoc" placeholder="Klik peta untuk destinasi..." readonly style="background:#f9f9f9">
         <button class="btn btn-order" onclick="submitBooking()">Tempah & Tunggu Pemandu</button>
     </div>
 
     <div id="statusArea" class="hidden">
-        <div id="statusMsg" class="status-box waiting">Menunggu pemandu mengesahkan pesanan anda...</div>
+        <div id="statusMsg" class="status-box waiting">
+            Sedang mencari pemandu... Sila tunggu sebentar.
+        </div>
         
-        <div id="paymentArea" class="pay-now hidden" style="margin-top:15px; padding:15px;">
-            <h3>Pemandu Sedia! ✅</h3>
-            <p>Sila buat bayaran RM <span id="fare">0.00</span> ke:</p>
-            <p><b>MAYBANK: 162263547890</b><br>Ahmad Transport</p>
+        <div id="paymentArea" class="pay-now hidden">
+            <h3 style="margin-top:0">Pemandu Sedia! ✅</h3>
+            <p>Sila buat bayaran <b>RM <span id="fare">0.00</span></b> ke akaun di bawah:</p>
+            <div style="background:#f1f1f1; padding:10px; border-radius:8px; font-family:monospace;">
+                <b>MAYBANK: 162263547890</b><br>
+                Nama: Ahmad Transport
+            </div>
+            
             <hr>
-            <p>Selepas bayar, klik butang di bawah:</p>
-            <button class="btn" style="background:#1a73e8; color:white;" onclick="uploadedReceipt()">Saya Sudah Bayar & Upload</button>
+            
+            <p style="font-size:13px; color:#666;">1. Klik butang ini untuk hantar resit:</p>
+            <a id="waLink" href="#" target="_blank" class="btn btn-wa">📲 Hantar Resit ke WhatsApp</a>
+            
+            <p style="font-size:13px; color:#666; margin-top:15px;">2. Selepas hantar resit, klik butang ini:</p>
+            <button class="btn btn-confirm" onclick="uploadedReceipt()">Saya Sudah Bayar</button>
         </div>
     </div>
 </div>
@@ -50,6 +67,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 
 <script>
+    // Konfigurasi Firebase anda
     const firebaseConfig = {
       apiKey: "AIzaSyA9vK7iI1awExMkWxMFLtNDVlM4d1EM26o",
       authDomain: "mytransporter-687d9.firebaseapp.com",
@@ -60,30 +78,33 @@
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    let pickup, dropoff, currentOrderId;
+    let dropoffCoords, currentOrderId;
 
-    // Setup Peta Simple
+    // Setup Peta Mudah
     var map = L.map('map').setView([3.139, 101.686], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    
     map.on('click', e => { 
-        dropoff = e.latlng; 
-        document.getElementById('dropoffLoc').value = e.latlng.lat.toFixed(4) + "," + e.latlng.lng.toFixed(4);
+        dropoffCoords = e.latlng; 
+        document.getElementById('dropoffLoc').value = "Lat: " + e.latlng.lat.toFixed(4) + ", Lon: " + e.latlng.lng.toFixed(4);
     });
 
     function submitBooking() {
         const name = document.getElementById('custName').value;
-        if(!name || !dropoff) return alert("Isi nama & pilih destinasi!");
+        const phone = document.getElementById('custPhone').value;
+        if(!name || !dropoffCoords) return alert("Sila isi nama & pilih destinasi di peta!");
 
         const newRef = database.ref('pesanan').push();
         currentOrderId = newRef.key;
         
         newRef.set({
             nama: name,
-            phone: document.getElementById('custPhone').value,
+            phone: phone,
             pickup: "Lokasi GPS",
             dropoff: document.getElementById('dropoffLoc').value,
             status: "Menunggu Sahkan",
-            harga: "15.00" // Contoh harga tetap
+            harga: "15.00", // Harga statik untuk contoh
+            masa: new Date().toLocaleString()
         });
 
         document.getElementById('bookingForm').classList.add('hidden');
@@ -97,16 +118,23 @@
             if(!data) return;
 
             if(data.status === "Sila Bayar") {
-                document.getElementById('statusMsg').innerText = "Pemandu berminat! Sila buat bayaran segera.";
+                document.getElementById('statusMsg').innerText = "Pemandu berminat! Sila selesaikan bayaran.";
                 document.getElementById('paymentArea').classList.remove('hidden');
                 document.getElementById('fare').innerText = data.harga;
+                
+                // Kemaskini Link WhatsApp dengan info pesanan
+                const waMsg = encodeURIComponent(`Halo, saya ${data.nama}. Ini resit bayaran RM${data.harga} untuk tempahan MyTransporter.`);
+                document.getElementById('waLink').href = `https://wa.me/60148495947?text=${waMsg}`;
+
             } else if(data.status === "Semak Resit") {
                 document.getElementById('paymentArea').classList.add('hidden');
-                document.getElementById('statusMsg').innerText = "Resit dihantar. Menunggu pemandu sahkan duit masuk...";
+                document.getElementById('statusMsg').className = "status-box waiting";
+                document.getElementById('statusMsg').innerText = "Resit telah dihantar. Pemandu sedang menyemak bayaran anda...";
             } else if(data.status === "Sedang Berjalan") {
+                document.getElementById('paymentArea').classList.add('hidden');
                 document.getElementById('statusMsg').style.background = "#27ae60";
                 document.getElementById('statusMsg').style.color = "white";
-                document.getElementById('statusMsg').innerText = "Bayaran Diterima! Pemandu dalam perjalanan ke lokasi anda.";
+                document.getElementById('statusMsg').innerText = "Bayaran SAH! Pemandu sedang menuju ke lokasi anda. 🚗💨";
             }
         });
     }
