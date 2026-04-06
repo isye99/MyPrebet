@@ -11,34 +11,60 @@
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; padding: 15px; margin: 0; }
         .card { background: white; max-width: 500px; margin: auto; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #2c3e50; margin-top: 0; }
+        
         #map { height: 350px; width: 100%; border-radius: 10px; margin: 10px 0; border: 2px solid #ddd; z-index: 1; }
+        
         input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 14px; }
         .readonly-input { background: #f9f9f9; color: #555; cursor: not-allowed; }
-        .btn { width: 100%; padding: 15px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; font-size: 16px; text-decoration: none; display: inline-block; text-align: center; box-sizing: border-box; }
-        .btn-gps { background: #3498db; color: white; }
+        
+        .btn { padding: 12px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; text-decoration: none; display: inline-block; text-align: center; box-sizing: border-box; }
+        .btn-block { width: 100%; margin-top: 10px; padding: 15px; font-size: 16px; }
+        
+        .btn-gps { background: #3498db; color: white; width: 100%; }
+        .btn-search { background: #34495e; color: white; width: 80px; margin: 8px 0; }
         .btn-order { background: #27ae60; color: white; }
         .btn-wa { background: #25D366; color: white; }
         .btn-confirm { background: #1a73e8; color: white; }
-        .status-box { padding: 15px; border-radius: 10px; text-align: center; margin-top: 10px; font-weight: bold; border: 1px solid #ffeeba; background: #fff3cd; color: #856404; }
+
+        .price-display { background: #e8f0fe; padding: 10px; border-radius: 8px; text-align: center; margin: 10px 0; border: 1px solid #b3d7ff; }
+        .status-box { padding: 15px; border-radius: 10px; text-align: center; margin-top: 10px; font-weight: bold; font-size: 14px; border: 1px solid #ffeeba; background: #fff3cd; color: #856404; }
         .pay-now { background: #ffffff; border: 2px solid #28a745; margin-top: 15px; padding: 15px; border-radius: 10px; }
         .hidden { display: none !important; }
         .leaflet-routing-container { display: none !important; }
+        
+        .search-container { display: flex; gap: 5px; align-items: center; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2 style="text-align:center;">🚗 MyTransporter</h2>
+    <h2>🚗 MyTransporter</h2>
     
     <div id="bookingForm">
         <input type="text" id="custName" placeholder="Nama Anda">
         <input type="tel" id="custPhone" placeholder="No. Telefon">
+        
         <button class="btn btn-gps" onclick="getLocation()">📍 Kesan Lokasi Jemput Saya</button>
+        
         <div id="map"></div>
+
+        <label style="font-size: 12px; color: #666;">Lokasi Jemput:</label>
         <input type="text" id="pickupLoc" placeholder="Lokasi jemput..." readonly class="readonly-input">
-        <input type="text" id="dropoffLoc" placeholder="Lokasi destinasi..." readonly class="readonly-input">
-        <h3 id="fareText" style="text-align:center; color:#27ae60;">RM 0.00</h3>
-        <button class="btn btn-order" onclick="submitBooking()">Tempah & Tunggu Pemandu</button>
+        
+        <label style="font-size: 12px; color: #666;">Cari & Pilih Destinasi:</label>
+        <div class="search-container">
+            <input type="text" id="destSearch" placeholder="Taip destinasi (cth: KLCC, KTM Bangi)">
+            <button class="btn btn-search" onclick="searchDestination()">Cari</button>
+        </div>
+        <input type="text" id="dropoffLoc" placeholder="Alamat destinasi dikesan..." readonly class="readonly-input">
+        
+        <div class="price-display">
+            <div id="distText" style="font-size:12px;">Jarak: 0 km</div>
+            <h2 id="fareText" style="margin:0; color:#27ae60;">RM 0.00</h2>
+        </div>
+
+        <button class="btn btn-block btn-order" onclick="submitBooking()">Tempah & Tunggu Pemandu</button>
     </div>
 
     <div id="statusArea" class="hidden">
@@ -48,13 +74,13 @@
             <h3 style="margin:0">Pemandu Sahkan! ✅</h3>
             <p>Sila bayar <b>RM <span id="finalFare">0.00</span></b> ke:</p>
             <div style="background:#f1f1f1; padding:10px; border-radius:8px; font-family:monospace; margin-bottom:10px;">
-                <b>MAYBANK: 162263547890</b> (Ahmad Transport)
+                <b>MAYBANK: 162263547890</b><br>Ahmad Transport
             </div>
             
-            <a id="waLink" href="#" target="_blank" class="btn btn-wa">📲 Hantar Resit ke WhatsApp</a>
-            <button class="btn btn-confirm" onclick="uploadedReceipt()">Saya Sudah Bayar</button>
+            <a id="waLink" href="#" target="_blank" class="btn btn-block btn-wa">📲 Hantar Resit ke WhatsApp</a>
+            <button class="btn btn-block btn-confirm" onclick="uploadedReceipt()">Saya Sudah Bayar</button>
         </div>
-        </div>
+    </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -75,15 +101,16 @@
 
     let currentOrderId = localStorage.getItem('lastOrderId');
     let pickupCoords, dropoffCoords, routingControl, driverMarker;
+    let pickupMarker, dropoffMarker;
     let finalPrice = 0;
 
     var map = L.map('map').setView([3.139, 101.686], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    var carIcon = L.icon({
-        iconUrl: 'https://cdn-icons-png.flaticon.com/512/854/854838.png',
-        iconSize: [35, 35], iconAnchor: [17, 17]
-    });
+    // Icons
+    var blueIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41] });
+    var redIcon = L.icon({ iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png', shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png', iconSize: [25, 41], iconAnchor: [12, 41] });
+    var carIcon = L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/854/854838.png', iconSize: [35, 35], iconAnchor: [17, 17] });
 
     if (currentOrderId) {
         document.getElementById('bookingForm').classList.add('hidden');
@@ -91,27 +118,63 @@
         listenToStatus();
     }
 
+    // 1. KESAN LOKASI JEMPUT (IMPROVED)
     function getLocation() {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(pos => {
                 pickupCoords = L.latLng(pos.coords.latitude, pos.coords.longitude);
                 map.setView(pickupCoords, 16);
+                
+                // Letak pin biru serta-merta
+                if (pickupMarker) map.removeLayer(pickupMarker);
+                pickupMarker = L.marker(pickupCoords, {icon: blueIcon}).addTo(map).bindPopup("Lokasi Jemput Anda").openPopup();
+                
                 getAddress(pickupCoords.lat, pickupCoords.lng, 'pickupLoc');
                 updateRoute();
-            });
+            }, () => alert("Sila benarkan GPS!"));
         }
     }
 
+    // 2. CARI DESTINASI (NEW)
+    async function searchDestination() {
+        const query = document.getElementById('destSearch').value;
+        if (!query) return alert("Taip nama tempat!");
+
+        try {
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}, Malaysia`);
+            const data = await res.json();
+            if (data.length > 0) {
+                const firstResult = data[0];
+                dropoffCoords = L.latLng(firstResult.lat, firstResult.lon);
+                map.setView(dropoffCoords, 15);
+                
+                // Letak pin merah
+                if (dropoffMarker) map.removeLayer(dropoffMarker);
+                dropoffMarker = L.marker(dropoffCoords, {icon: redIcon}).addTo(map).bindPopup("Destinasi").openPopup();
+                
+                document.getElementById('dropoffLoc').value = firstResult.display_name.substring(0, 50) + "...";
+                updateRoute();
+            } else {
+                alert("Tempat tidak dijumpai. Cuba taip lebih spesifik.");
+            }
+        } catch (e) { alert("Ralat carian."); }
+    }
+
+    // Klik peta manual untuk destinasi
     map.on('click', e => { 
         dropoffCoords = e.latlng; 
+        if (dropoffMarker) map.removeLayer(dropoffMarker);
+        dropoffMarker = L.marker(dropoffCoords, {icon: redIcon}).addTo(map).bindPopup("Destinasi Terpilih").openPopup();
         getAddress(dropoffCoords.lat, dropoffCoords.lng, 'dropoffLoc');
         updateRoute(); 
     });
 
     async function getAddress(lat, lon, fieldId) {
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`);
-        const data = await response.json();
-        document.getElementById(fieldId).value = (data.display_name || "Lokasi dikesan").substring(0, 50) + "...";
+        try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`);
+            const data = await response.json();
+            document.getElementById(fieldId).value = (data.display_name || "Lokasi dikesan").substring(0, 50) + "...";
+        } catch (e) { document.getElementById(fieldId).value = lat.toFixed(4) + "," + lon.toFixed(4); }
     }
 
     function updateRoute() {
@@ -119,7 +182,8 @@
         if (routingControl) map.removeControl(routingControl);
         routingControl = L.Routing.control({
             waypoints: [pickupCoords, dropoffCoords],
-            show: false, addWaypoints: false
+            show: false, addWaypoints: false,
+            createMarker: function() { return null; } // Gunakan marker custom kita sendiri
         }).on('routesfound', e => {
             let dist = e.routes[0].summary.totalDistance / 1000;
             finalPrice = Math.max(10, dist * 2);
@@ -129,7 +193,7 @@
 
     function submitBooking() {
         const name = document.getElementById('custName').value;
-        if(!name || !pickupCoords || !dropoffCoords) return alert("Sila pilih lokasi!");
+        if(!name || !pickupCoords || !dropoffCoords) return alert("Sila pastikan nama diisi & lokasi jemput/hantar telah dipilih!");
 
         const newRef = database.ref('pesanan').push();
         currentOrderId = newRef.key;
@@ -150,7 +214,7 @@
 
     function uploadedReceipt() {
         database.ref('pesanan/' + currentOrderId).update({ status: "Semak Resit" })
-        .then(() => alert("Notifikasi dihantar ke pemandu!"));
+        .then(() => alert("Resit telah dihantar! Menunggu pengesahan pemandu."));
     }
 
     function listenToStatus() {
@@ -167,16 +231,19 @@
             const msgBox = document.getElementById('statusMsg');
             if(data.status === "Ditolak") {
                 msgBox.style.background = "#e74c3c"; msgBox.style.color = "white";
-                msgBox.innerHTML = `Maaf, pemandu menolak pesanan anda.<br><button onclick="resetApp()" style="margin-top:10px; cursor:pointer; padding:5px;">Tempah Semula</button>`;
+                msgBox.innerHTML = `Maaf, pemandu menolak pesanan anda.<br><button onclick="resetApp()" style="margin-top:10px; cursor:pointer; padding:8px; border-radius:5px; border:none;">Cuba Tempah Lagi</button>`;
             } else if(data.status === "Sila Bayar") {
                 document.getElementById('paymentArea').classList.remove('hidden');
                 document.getElementById('finalFare').innerText = data.harga;
-                document.getElementById('waLink').href = `https://wa.me/60148495947?text=Resit RM${data.harga} dari ${data.nama}`;
+                document.getElementById('waLink').href = `https://wa.me/60148495947?text=Saya ${data.nama}, ini resit RM${data.harga}`;
             } else if(data.status === "Sedang Berjalan") {
                 document.getElementById('paymentArea').classList.add('hidden');
                 msgBox.style.background = "#27ae60"; msgBox.style.color = "white";
                 msgBox.innerText = "Bayaran Sah! Pemandu sedang menuju ke lokasi anda.";
-            } else if(data.status === "Selesai") { resetApp(); alert("Terima kasih!"); }
+            } else if(data.status === "Selesai") { 
+                alert("Terima kasih! Perjalanan anda telah selesai.");
+                resetApp(); 
+            }
         });
     }
 
