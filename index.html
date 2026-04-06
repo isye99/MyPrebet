@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tempah MyTransporter</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 15px; }
+        .card { background: white; max-width: 500px; margin: auto; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { color: #1a73e8; text-align: center; }
+        input, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        .price-box { background: #e8f0fe; padding: 15px; border-radius: 8px; text-align: center; margin-top: 10px; }
+        .btn-order { background: #28a745; color: white; border: none; width: 100%; padding: 15px; border-radius: 8px; font-size: 18px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+        .duitnow-info { font-size: 13px; color: #444; text-align: center; margin-top: 15px; padding: 10px; border: 1px dashed #ccc; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>🚗 MyTransporter</h2>
+    
+    <input type="text" id="custName" placeholder="Nama Anda">
+    <input type="tel" id="custPhone" placeholder="No. Telefon (cth: 0148495947)">
+    
+    <label>Lokasi Jemput:</label>
+    <input type="text" id="pickupLoc" placeholder="Lokasi jemput anda">
+    
+    <label>Destinasi:</label>
+    <input type="text" id="dropoffLoc" placeholder="Lokasi destinasi anda">
+    
+    <label>Bilangan Penumpang (Maks 4):</label>
+    <select id="pax">
+        <option value="1">1 Orang</option>
+        <option value="2">2 Orang</option>
+        <option value="3">3 Orang</option>
+        <option value="4">4 Orang</option>
+    </select>
+
+    <div class="price-box">
+        <span>Harga Tetap / Minimum:</span>
+        <h1 id="totalFare">RM 10.00</h1>
+        <small>RM 2/km (Min RM 10)</small>
+    </div>
+
+    <div class="duitnow-info">
+        Bayaran DuitNow: <b>0148495947</b><br>
+        <small>(Sila buat bayaran selepas menempah)</small>
+    </div>
+    
+    <button class="btn-order" onclick="submitOrder()">Tempah Sekarang</button>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+
+<script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyA9vK7iI1awExMkWxMFLtNDVlM4d1EM26o",
+      authDomain: "mytransporter-687d9.firebaseapp.com",
+      databaseURL: "https://mytransporter-687d9-default-rtdb.asia-southeast1.firebasedatabase.app/",
+      projectId: "mytransporter-687d9",
+      storageBucket: "mytransporter-687d9.firebasestorage.app",
+      messagingSenderId: "495656207465",
+      appId: "1:495656207465:web:4d603fe3c77abadfe0cef8"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    function submitOrder() {
+        const orderData = {
+            nama: document.getElementById('custName').value,
+            phone: document.getElementById('custPhone').value,
+            pickup: document.getElementById('pickupLoc').value,
+            dropoff: document.getElementById('dropoffLoc').value,
+            pax: document.getElementById('pax').value,
+            harga: "10.00",
+            status: "Menunggu Pemandu",
+            masa: new Date().toLocaleString()
+        };
+
+        if(!orderData.nama || !orderData.pickup || !orderData.dropoff) {
+            alert("Sila lengkapkan maklumat!");
+            return;
+        }
+
+        database.ref('pesanan').push(orderData).then(() => {
+            alert("Pesanan berjaya dihantar! Sila tunggu pemandu.");
+            location.reload();
+        }).catch((e) => alert("Ralat: " + e.message));
+    }
+</script>
+</body>
+</html>
