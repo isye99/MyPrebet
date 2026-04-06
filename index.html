@@ -47,13 +47,14 @@
         <div id="paymentArea" class="pay-now hidden">
             <h3 style="margin:0">Pemandu Sahkan! ✅</h3>
             <p>Sila bayar <b>RM <span id="finalFare">0.00</span></b> ke:</p>
-            <p><b>MAYBANK: 162263547890</b> (Ahmad Transport)</p>
+            <div style="background:#f1f1f1; padding:10px; border-radius:8px; font-family:monospace; margin-bottom:10px;">
+                <b>MAYBANK: 162263547890</b> (Ahmad Transport)
+            </div>
+            
             <a id="waLink" href="#" target="_blank" class="btn btn-wa">📲 Hantar Resit ke WhatsApp</a>
             <button class="btn btn-confirm" onclick="uploadedReceipt()">Saya Sudah Bayar</button>
         </div>
-        
-        <button class="btn" style="background:#eee; color:#333; font-size:12px;" onclick="resetApp()">Batal / Tempah Baru</button>
-    </div>
+        </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -166,7 +167,7 @@
             const msgBox = document.getElementById('statusMsg');
             if(data.status === "Ditolak") {
                 msgBox.style.background = "#e74c3c"; msgBox.style.color = "white";
-                msgBox.innerText = "Maaf, pemandu menolak pesanan anda. Sila cuba tempah lagi.";
+                msgBox.innerHTML = `Maaf, pemandu menolak pesanan anda.<br><button onclick="resetApp()" style="margin-top:10px; cursor:pointer; padding:5px;">Tempah Semula</button>`;
             } else if(data.status === "Sila Bayar") {
                 document.getElementById('paymentArea').classList.remove('hidden');
                 document.getElementById('finalFare').innerText = data.harga;
