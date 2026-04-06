@@ -3,26 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyTransporter - Peta Percuma</title>
+    <title>MyTransporter - Laluan & Harga</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
+    <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
 
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; margin: 0; padding: 15px; }
         .card { background: white; max-width: 500px; margin: auto; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
         h2 { color: #2c3e50; text-align: center; margin-top: 0; }
         
-        #map { height: 300px; border-radius: 10px; margin-bottom: 15px; border: 2px solid #ddd; }
+        #map { height: 350px; border-radius: 10px; margin-bottom: 15px; border: 2px solid #ddd; z-index: 1; }
         
-        input, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; background: #fff; }
-        .readonly-input { background: #eeeeee; cursor: not-allowed; }
+        input, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+        .readonly-input { background: #f9f9f9; color: #555; cursor: not-allowed; }
         
         .btn-gps { background: #3498db; color: white; border: none; padding: 10px; border-radius: 8px; width: 100%; cursor: pointer; font-weight: bold; margin-bottom: 10px; }
         .btn-order { background: #27ae60; color: white; border: none; width: 100%; padding: 15px; border-radius: 8px; font-size: 18px; cursor: pointer; font-weight: bold; margin-top: 10px; }
         
-        .instruction { font-size: 12px; color: #666; text-align: center; margin-bottom: 10px; }
-        .price-box { background: #e8f0fe; padding: 10px; border-radius: 8px; text-align: center; margin-top: 10px; }
+        .price-box { background: #e8f0fe; padding: 15px; border-radius: 8px; text-align: center; margin-top: 10px; border: 1px solid #b3d7ff; }
+        .distance-info { font-size: 14px; color: #555; margin-bottom: 5px; }
+        
+        /* Sembunyikan panel arahan teks Routing Machine supaya peta nampak bersih */
+        .leaflet-routing-container { display: none; }
     </style>
 </head>
 <body>
@@ -31,31 +37,26 @@
     <h2>🚗 MyTransporter</h2>
     
     <input type="text" id="custName" placeholder="Nama Anda">
-    <input type="tel" id="custPhone" placeholder="No. Telefon (cth: 0148495947)">
+    <input type="tel" id="custPhone" placeholder="No. Telefon">
 
-    <div class="instruction">Klik butang di bawah untuk lokasi jemput, kemudian klik pada peta untuk destinasi.</div>
-    
     <button class="btn-gps" onclick="getLocation()">📍 Gunakan Lokasi Semasa Saya</button>
     
     <div id="map"></div>
 
-    <label>Lokasi Jemput:</label>
     <input type="text" id="pickupLoc" placeholder="Lokasi jemput..." readonly class="readonly-input">
+    <input type="text" id="dropoffLoc" placeholder="Klik peta untuk destinasi..." readonly class="readonly-input">
     
-    <label>Destinasi (Klik pada peta):</label>
-    <input type="text" id="dropoffLoc" placeholder="Klik pada peta untuk pilih..." readonly class="readonly-input">
-    
-    <label>Bilangan Penumpang:</label>
     <select id="pax">
-        <option value="1">1 Orang</option>
-        <option value="2">2 Orang</option>
-        <option value="3">3 Orang</option>
-        <option value="4">4 Orang</option>
+        <option value="1">1 Penumpang</option>
+        <option value="2">2 Penumpang</option>
+        <option value="3">3 Penumpang</option>
+        <option value="4">4 Penumpang</option>
     </select>
 
     <div class="price-box">
-        <span>Harga Tetap / Minimum:</span>
-        <h2 style="margin:0">RM 10.00</h2>
+        <div class="distance-info" id="distanceText">Jarak: 0 km</div>
+        <span style="font-size: 14px; color: #666;">Jumlah Bayaran:</span>
+        <h2 style="margin:0; color: #27ae60;" id="totalFare">RM 0.00</h2>
     </div>
 
     <button class="btn-order" onclick="submitOrder()">Tempah Sekarang</button>
@@ -79,71 +80,111 @@
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    // Inisialisasi Peta (Leaflet)
-    var map = L.map('map').setView([3.139, 101.686], 13); // Default Kuala Lumpur
+    // Inisialisasi Peta
+    var map = L.map('map').setView([3.139, 101.686], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    var pickupMarker, dropoffMarker;
+    var pickupCoords = null;
+    var dropoffCoords = null;
+    var routingControl = null;
+    var finalDistanceKm = 0;
+    var finalFare = 0;
 
-    // Fungsi Kesan Lokasi Semasa (GPS)
+    // 1. Fungsi GPS untuk Pickup
     function getLocation() {
         if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(showPosition, (err) => alert("Sila benarkan akses lokasi!"));
-        } else {
-            alert("Browser anda tidak menyokong GPS.");
+            navigator.geolocation.getCurrentPosition((position) => {
+                pickupCoords = L.latLng(position.coords.latitude, position.coords.longitude);
+                map.setView(pickupCoords, 15);
+                updateRoute();
+                getAddress(pickupCoords.lat, pickupCoords.lng, 'pickupLoc');
+            }, () => alert("Sila aktifkan GPS!"));
         }
     }
 
-    function showPosition(position) {
-        var lat = position.coords.latitude;
-        var lon = position.coords.longitude;
-        map.setView([lat, lon], 16);
-
-        if (pickupMarker) map.removeLayer(pickupMarker);
-        pickupMarker = L.marker([lat, lon], {draggable: false}).addTo(map).bindPopup("Lokasi Jemput").openPopup();
-        
-        getAddress(lat, lon, 'pickupLoc');
-    }
-
-    // Fungsi Klik Peta untuk Pilih Destinasi
+    // 2. Klik Peta untuk Destinasi
     map.on('click', function(e) {
-        var lat = e.latlng.lat;
-        var lon = e.latlng.lng;
-
-        if (dropoffMarker) map.removeLayer(dropoffMarker);
-        dropoffMarker = L.marker([lat, lon]).addTo(map).bindPopup("Destinasi").openPopup();
-        
-        getAddress(lat, lon, 'dropoffLoc');
+        dropoffCoords = e.latlng;
+        updateRoute();
+        getAddress(dropoffCoords.lat, dropoffCoords.lng, 'dropoffLoc');
     });
 
-    // Fungsi Tukar Koordinat ke Alamat (Reverse Geocoding - Percuma)
+    // 3. Fungsi Utama: Lukis Laluan & Kira Harga
+    function updateRoute() {
+        if (!pickupCoords || !dropoffCoords) return;
+
+        // Buang laluan lama jika ada
+        if (routingControl) {
+            map.removeControl(routingControl);
+        }
+
+        routingControl = L.Routing.control({
+            waypoints: [pickupCoords, dropoffCoords],
+            routeWhileDragging: false,
+            addWaypoints: false,
+            show: false, // Sembunyikan panel teks
+            createMarker: function(i, wp) {
+                return L.marker(wp.latLng, {
+                    draggable: false,
+                    icon: L.icon({
+                        iconUrl: i === 0 ? 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-blue.png' : 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+                        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [1, -34],
+                        shadowSize: [41, 41]
+                    })
+                }).bindPopup(i === 0 ? "Jemput Di Sini" : "Hantar Di Sini");
+            }
+        }).on('routesfound', function(e) {
+            var routes = e.routes;
+            var summary = routes[0].summary;
+            
+            // Jarak dalam KM
+            finalDistanceKm = summary.totalDistance / 1000;
+            
+            // Kira Harga: RM 2 per km, Min RM 10
+            // Formula: $$Harga = \max(10, Jarak \times 2)$$
+            finalFare = Math.max(10, finalDistanceKm * 2);
+
+            document.getElementById('distanceText').innerText = `Jarak: ${finalDistanceKm.toFixed(2)} km`;
+            document.getElementById('totalFare').innerText = `RM ${finalFare.toFixed(2)}`;
+        }).addTo(map);
+    }
+
     async function getAddress(lat, lon, elementId) {
-        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`);
-        const data = await response.json();
-        document.getElementById(elementId).value = data.display_name;
+        try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`);
+            const data = await response.json();
+            document.getElementById(elementId).value = data.display_name.substring(0, 50) + "...";
+        } catch (e) {
+            document.getElementById(elementId).value = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+        }
     }
 
     function submitOrder() {
-        const orderData = {
-            nama: document.getElementById('custName').value,
-            phone: document.getElementById('custPhone').value,
-            pickup: document.getElementById('pickupLoc').value,
-            dropoff: document.getElementById('dropoffLoc').value,
-            pax: document.getElementById('pax').value,
-            harga: "10.00",
-            status: "Menunggu Pemandu",
-            masa: new Date().toLocaleString()
-        };
+        const name = document.getElementById('custName').value;
+        const phone = document.getElementById('custPhone').value;
 
-        if(!orderData.nama || !orderData.pickup || !orderData.dropoff) {
-            alert("Sila lengkapkan nama dan pilih lokasi pada peta!");
+        if(!name || !pickupCoords || !dropoffCoords) {
+            alert("Sila lengkapkan profil dan pilih lokasi pada peta!");
             return;
         }
 
-        database.ref('pesanan').push(orderData).then(() => {
-            alert("Pesanan berjaya! Sila tunggu pemandu.");
+        database.ref('pesanan').push({
+            nama: name,
+            phone: phone,
+            pickup: document.getElementById('pickupLoc').value,
+            dropoff: document.getElementById('dropoffLoc').value,
+            jarak: finalDistanceKm.toFixed(2) + " km",
+            harga: finalFare.toFixed(2),
+            pax: document.getElementById('pax').value,
+            status: "Menunggu Pemandu",
+            masa: new Date().toLocaleString()
+        }).then(() => {
+            alert("Tempahan Berjaya! Pemandu akan segera hubungi anda.");
             location.reload();
         });
     }
