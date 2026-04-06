@@ -3,15 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tempah MyTransporter</title>
+    <title>MyTransporter - Peta Percuma</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #f0f2f5; padding: 15px; }
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; margin: 0; padding: 15px; }
         .card { background: white; max-width: 500px; margin: auto; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        h2 { color: #1a73e8; text-align: center; }
-        input, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
-        .price-box { background: #e8f0fe; padding: 15px; border-radius: 8px; text-align: center; margin-top: 10px; }
-        .btn-order { background: #28a745; color: white; border: none; width: 100%; padding: 15px; border-radius: 8px; font-size: 18px; cursor: pointer; font-weight: bold; margin-top: 10px; }
-        .duitnow-info { font-size: 13px; color: #444; text-align: center; margin-top: 15px; padding: 10px; border: 1px dashed #ccc; }
+        h2 { color: #2c3e50; text-align: center; margin-top: 0; }
+        
+        #map { height: 300px; border-radius: 10px; margin-bottom: 15px; border: 2px solid #ddd; }
+        
+        input, select { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; background: #fff; }
+        .readonly-input { background: #eeeeee; cursor: not-allowed; }
+        
+        .btn-gps { background: #3498db; color: white; border: none; padding: 10px; border-radius: 8px; width: 100%; cursor: pointer; font-weight: bold; margin-bottom: 10px; }
+        .btn-order { background: #27ae60; color: white; border: none; width: 100%; padding: 15px; border-radius: 8px; font-size: 18px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+        
+        .instruction { font-size: 12px; color: #666; text-align: center; margin-bottom: 10px; }
+        .price-box { background: #e8f0fe; padding: 10px; border-radius: 8px; text-align: center; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -21,14 +32,20 @@
     
     <input type="text" id="custName" placeholder="Nama Anda">
     <input type="tel" id="custPhone" placeholder="No. Telefon (cth: 0148495947)">
+
+    <div class="instruction">Klik butang di bawah untuk lokasi jemput, kemudian klik pada peta untuk destinasi.</div>
     
+    <button class="btn-gps" onclick="getLocation()">📍 Gunakan Lokasi Semasa Saya</button>
+    
+    <div id="map"></div>
+
     <label>Lokasi Jemput:</label>
-    <input type="text" id="pickupLoc" placeholder="Lokasi jemput anda">
+    <input type="text" id="pickupLoc" placeholder="Lokasi jemput..." readonly class="readonly-input">
     
-    <label>Destinasi:</label>
-    <input type="text" id="dropoffLoc" placeholder="Lokasi destinasi anda">
+    <label>Destinasi (Klik pada peta):</label>
+    <input type="text" id="dropoffLoc" placeholder="Klik pada peta untuk pilih..." readonly class="readonly-input">
     
-    <label>Bilangan Penumpang (Maks 4):</label>
+    <label>Bilangan Penumpang:</label>
     <select id="pax">
         <option value="1">1 Orang</option>
         <option value="2">2 Orang</option>
@@ -38,15 +55,9 @@
 
     <div class="price-box">
         <span>Harga Tetap / Minimum:</span>
-        <h1 id="totalFare">RM 10.00</h1>
-        <small>RM 2/km (Min RM 10)</small>
+        <h2 style="margin:0">RM 10.00</h2>
     </div>
 
-    <div class="duitnow-info">
-        Bayaran DuitNow: <b>0148495947</b><br>
-        <small>(Sila buat bayaran selepas menempah)</small>
-    </div>
-    
     <button class="btn-order" onclick="submitOrder()">Tempah Sekarang</button>
 </div>
 
@@ -54,6 +65,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
 
 <script>
+    // Konfigurasi Firebase anda
     const firebaseConfig = {
       apiKey: "AIzaSyA9vK7iI1awExMkWxMFLtNDVlM4d1EM26o",
       authDomain: "mytransporter-687d9.firebaseapp.com",
@@ -66,6 +78,52 @@
 
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
+
+    // Inisialisasi Peta (Leaflet)
+    var map = L.map('map').setView([3.139, 101.686], 13); // Default Kuala Lumpur
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    var pickupMarker, dropoffMarker;
+
+    // Fungsi Kesan Lokasi Semasa (GPS)
+    function getLocation() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(showPosition, (err) => alert("Sila benarkan akses lokasi!"));
+        } else {
+            alert("Browser anda tidak menyokong GPS.");
+        }
+    }
+
+    function showPosition(position) {
+        var lat = position.coords.latitude;
+        var lon = position.coords.longitude;
+        map.setView([lat, lon], 16);
+
+        if (pickupMarker) map.removeLayer(pickupMarker);
+        pickupMarker = L.marker([lat, lon], {draggable: false}).addTo(map).bindPopup("Lokasi Jemput").openPopup();
+        
+        getAddress(lat, lon, 'pickupLoc');
+    }
+
+    // Fungsi Klik Peta untuk Pilih Destinasi
+    map.on('click', function(e) {
+        var lat = e.latlng.lat;
+        var lon = e.latlng.lng;
+
+        if (dropoffMarker) map.removeLayer(dropoffMarker);
+        dropoffMarker = L.marker([lat, lon]).addTo(map).bindPopup("Destinasi").openPopup();
+        
+        getAddress(lat, lon, 'dropoffLoc');
+    });
+
+    // Fungsi Tukar Koordinat ke Alamat (Reverse Geocoding - Percuma)
+    async function getAddress(lat, lon, elementId) {
+        const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`);
+        const data = await response.json();
+        document.getElementById(elementId).value = data.display_name;
+    }
 
     function submitOrder() {
         const orderData = {
@@ -80,14 +138,14 @@
         };
 
         if(!orderData.nama || !orderData.pickup || !orderData.dropoff) {
-            alert("Sila lengkapkan maklumat!");
+            alert("Sila lengkapkan nama dan pilih lokasi pada peta!");
             return;
         }
 
         database.ref('pesanan').push(orderData).then(() => {
-            alert("Pesanan berjaya dihantar! Sila tunggu pemandu.");
+            alert("Pesanan berjaya! Sila tunggu pemandu.");
             location.reload();
-        }).catch((e) => alert("Ralat: " + e.message));
+        });
     }
 </script>
 </body>
